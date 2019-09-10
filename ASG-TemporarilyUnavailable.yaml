@@ -1,0 +1,268 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'Service Catalog: EC2 AutoScaling- Linux Server'
+
+Parameters:
+  RootEBSVolumeSize:
+    Type: Number
+    Description: Size of EBS volume attached to the EC2
+    Default: 10
+    MinValue: 10
+    MaxValue: 100
+  InstanceName:
+    Description: Enter the name of the EC2 Instance.
+    Type: String
+    Default: 'Anupam-Asg-Test'
+  InstanceType:
+    Description: Choose the EC2 Instance type.
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.medium
+      - t2.large
+      - m5.large
+      - m5.xlarge
+  IamInstanceProfileName:
+    Description: The IAM Instance Profile Name to be applied to the EC2 machines.
+    Type: String
+    Default: EC2RoleInstanceProfile
+    AllowedValues:
+      - EC2RoleInstanceProfile
+  MinimumSize:
+    Description: 'Enter minimum number of the EC2 Instance[Enter number in between 1 to 20].'
+    Type: Number
+    MinValue: '1'
+    Default: '1'
+  MaximumSize:
+    Description: 'Enter max number of the EC2 Instance [Enter number in between 1 to 20].'
+    Type: Number
+    MaxValue: '4'
+    Default: '4'
+  DesiredCapacity:
+    Description: Enter desirable count for instance .
+    Type: Number
+    Default: '2'
+  LatestAmiId:
+    Description: Select AMI Id
+    Type: String
+    Default: 'ami-0b85d4ff00de6a225'
+  PrivateSubnetIdAZ1:
+    Description: SubnetId of the AZ1  private subnet
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: 'subnet-03416eae2babe5480'
+  PrivateSubnetIdAZ2:
+    Description: SubnetId of the AZ2  private subnet
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: 'subnet-067148c59580a3dd9'
+  PublicSubnetIdAZ1:
+    Description: SubnetId of the AZ1  public subnet
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: 'subnet-076b5b25b1fee90f6'
+  PublicSubnetIdAZ2:
+    Description: SubnetId of the AZ2  public subnet
+    Type: 'AWS::EC2::Subnet::Id'
+    Default: 'subnet-07085825409c09fda'
+  VpcId:
+    Description: VPC ID where the instances will be deployed
+    Type: 'AWS::EC2::VPC::Id'
+    Default: 'vpc-05ef9def6a5a10d6e'
+  SecurityGroup:
+    Description: Select which security group this EC2 will use.
+    Type: 'AWS::EC2::SecurityGroup::Id'
+    Default: 'sg-0be642cff02415c36'
+  LaunchTemplateName:
+    Description: Enter Launch Template Name.
+    Type: String
+    Default: 'Anupam-Asg-Test'
+  LaunchTemplateVersion:
+    Description: Enter Launch Template version.
+    Type: Number
+    Default: 1
+  AutoScalingGroupName:
+    Description: Enter AutoScaling Group Name.
+    Type: String
+    Default: 'Anupam-Asg-Test'
+  PolicyTargetValue:
+    Description: The target value (between 1-100) for the metric(CPU Utilization).
+    Type: Number
+    MinValue: '1'
+    MaxValue: '100'
+    Default: '60'
+  LoadBalancerName:
+    Type: String
+    Description: This name must be unique per region per account. Maximum 32 characters
+    Default: 'Anupam-Asg-Test'
+  LoadBalancerProtocol:
+    Type: String
+    Description: Enter the protocol the load balancer accepts.
+    Default: TCP
+    AllowedValues:
+      - TCP
+  TargetGroupName:
+    Type: String
+    Description: This name must be unique per region per account. Maximum 32 characters
+    Default: 'Anupam-Asg-Test'
+  HealthCheckProtocol:
+    Type: String
+    Description: Enter the protocol the load balancer uses when performing health checks on targets.
+    Default: TCP
+    AllowedValues:
+      - TCP
+  HealthyThresholdCount: 
+    Type: Number
+    Default: 3
+    Description: The number of consecutive health checks successes required before considering an unhealthy target healthy. In TCP mode Healthy and UnHealthy must be the same.
+  UnhealthyThresholdCount:
+    Type: Number
+    Default: 3
+    Description: The number of consecutive health check failures required before considering a target unhealthy. In TCP mode Healthy and UnHealthy must be the same.
+  HealthCheckIntervalSeconds:
+    Type: Number
+    Default: 30
+    Description: The approximate amount of time, in seconds, between health checks of an individual target. 
+  Port:
+    Type: Number
+    Description: The port on which the targets receive traffic.
+    Default: 80
+  UserData: 
+    Type: String
+    Description: UserData in Base64
+    Default: 'IyEvYmluL2Jhc2gKc3VkbyBzdSAtCnl1bSBpbnN0YWxsIHdnZXQgLXkKd2dldCBodHRwczovL2RpZ2l0YWwtaGVsbG93b3JsZC5zMy5hbWF6b25hd3MuY29tL05naW54LVRlbXBvcmFyaWx5VW5hdmFpbGFibGUuc2gKY2htb2QgK3ggTmdpbngtVGVtcG9yYXJpbHlVbmF2YWlsYWJsZS5zaAouL05naW54LVRlbXBvcmFyaWx5VW5hdmFpbGFibGUuc2gKCgoKCgo='
+  ApplicationValue:
+    Description: Please enter Application tag value name.
+    Type: String
+    Default: 'Anupam-Asg-Test'
+  EC2KeyName:
+    Description : KEY that you can use to ssh into EC2
+    Type: String
+    Default: 'canada-september2019'
+
+
+###############################################################################
+#                               Conditions                                    #
+###############################################################################
+Conditions:
+  CustomInstanceProfile: !Not [!Equals [!Ref IamInstanceProfileName, "DefaultSSMInstanceProfile"]]
+  
+Resources:
+  EC2InstanceLaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateName: !Ref LaunchTemplateName
+      LaunchTemplateData:
+        KeyName: !Ref "EC2KeyName"
+        InstanceType: !Ref InstanceType
+        ImageId: !Ref LatestAmiId
+        IamInstanceProfile: 
+          Name: !If [CustomInstanceProfile, !Ref IamInstanceProfileName, !ImportValue SSMInstanceProfile]
+        UserData: !Ref UserData
+        SecurityGroupIds:
+          - 
+            !Ref SecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: '/dev/sda1'
+            Ebs:
+              VolumeSize: !Ref RootEBSVolumeSize
+              VolumeType: 'gp2'
+        
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Ref InstanceName
+              - Key: applicationname
+                Value: !Ref ApplicationValue
+
+
+  EC2AutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      AutoScalingGroupName: !Ref AutoScalingGroupName
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnetIdAZ1
+        - !Ref PrivateSubnetIdAZ2
+      TargetGroupARNs:
+        - !Ref EaaSTargetGroup
+      LaunchTemplate:
+        LaunchTemplateId: !Ref EC2InstanceLaunchTemplate
+        Version: !Ref LaunchTemplateVersion
+      DesiredCapacity: !Ref DesiredCapacity
+      MinSize: !Ref MinimumSize
+      MaxSize: !Ref MaximumSize
+      LifecycleHookSpecificationList:
+        - LifecycleTransition: "autoscaling:EC2_INSTANCE_LAUNCHING"
+          LifecycleHookName: "ASG-hook"
+          HeartbeatTimeout: 600       
+      Tags:
+        - ResourceType: auto-scaling-group
+          PropagateAtLaunch: true
+          Value: !Ref InstanceName
+          Key: Name
+        - PropagateAtLaunch: true
+          Key: applicationname
+          Value: !Ref ApplicationValue
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MaxBatchSize: !Ref MaximumSize
+        MinInstancesInService: 0
+        MinSuccessfulInstancesPercent: 100
+        PauseTime: PT5M
+        WaitOnResourceSignals: false
+
+  EaaSAutoScalingCPUPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AutoScalingGroupName: !Ref EC2AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: !Ref PolicyTargetValue
+  
+  EaaSNetworkLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Ref LoadBalancerName
+      ## Public
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnetIdAZ1
+        - !Ref PublicSubnetIdAZ2
+      Type: network
+      Tags:
+        - Key: Name
+          Value: !Ref InstanceName
+        - Key: applicationname
+          Value: !Ref ApplicationValue
+
+  EaaSTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      Name: !Ref TargetGroupName
+      HealthCheckProtocol: !Ref HealthCheckProtocol
+      HealthyThresholdCount: !Ref HealthyThresholdCount
+      HealthCheckIntervalSeconds: !Ref HealthCheckIntervalSeconds
+      UnhealthyThresholdCount: !Ref UnhealthyThresholdCount
+      Port: !Ref Port
+      Protocol: !Ref HealthCheckProtocol
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Ref InstanceName
+        - Key: applicationname
+          Value: !Ref ApplicationValue
+
+  EaaSNetworkLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref EaaSTargetGroup
+      LoadBalancerArn: !Ref EaaSNetworkLoadBalancer
+      Port: !Ref Port
+      Protocol: !Ref LoadBalancerProtocol
+
+Outputs:
+  EC2InstanceLaunchTemplate:
+    Value: !Ref EC2InstanceLaunchTemplate
